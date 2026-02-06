@@ -7,7 +7,7 @@
 # Details at https://octivi.com/devops
 
 name: Update security.txt Expires field
-description: "GitHub Action to update the Expires field in `security.txt` files (`/.well-known/security.txt`, RFC 9116) to a future date so your published security contact metadata stays current."
+description: "Updates Expires in .well-known/security.txt (RFC 9116) to keep published security contact metadata current."
 branding:
   icon: calendar
   color: blue
