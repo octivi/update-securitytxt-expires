@@ -107,9 +107,6 @@ jobs:
       - uses: actions/checkout@v6
 
       - uses: octivi/update-securitytxt-expires@v1
-        with:
-          targets: ". src scripts"
-          exclude_paths: "build"
 
       # Optional: create PR in your own workflow
       - name: Create Pull Request
