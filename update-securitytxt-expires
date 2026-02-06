@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2025-2026  IMAGIN sp. z o.o.
+# SPDX-FileContributor: Marcin Engelmann <mengelmann@octivi.com>
+# SPDX-License-Identifier: MIT
+#
+# This file is part of the configuration created by Octivi's DevOps team.
+# Details at https://octivi.com/devops
+#
+# Update the Expires field in `security.txt` files to a future date so your published security
+# contact metadata stays current.
+
+# Octivi Bash Boilerplate (OBB) Header
+# Part of Octivi Bash Boilerplate https://github.com/octivi/bash-boilerplate
+################################################################################
+# Unofficial Bash "Strict Mode"
+# http://redsymbol.net/articles/unofficial-bash-strict-mode/
+set -euo pipefail
+# Define common constants regardless if they are used in the script
+__my_name="$(basename "${BASH_SOURCE[0]}")"
+readonly __my_name
+__my_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly __my_dir
+__my_path="${__my_dir}/${__my_name}"
+# shellcheck disable=SC2034
+readonly __my_path
+__my_args="$*"
+# shellcheck disable=SC2034
+readonly __my_args
+# Set IFS to just newline and tab
+IFS=$'\n\t'
+################################################################################
+
+usage() {
+  cat <<USAGE
+Usage: ${__my_name} [options]
+
+Options:
+  --targets "dir1 dir2"           Directories to scan (default: .)
+  --exclude-paths "path1 path2"   Paths to exclude (default: empty)
+  --expires-days "days"           Number of days to add to current date (default: 180)
+  -h, --help                      Show this help message
+USAGE
+}
+
+die() {
+  echo "ERROR: $*" 1>&2
+  exit 1
+}
+
+# Defaults (env overrides with fallbacks)
+TARGETS="${TARGETS:-.}"
+EXCLUDE_PATHS="${EXCLUDE_PATHS:-}"
+EXPIRES_DAYS="${EXPIRES_DAYS:-180}"
+CURRENT_DATE="${CURRENT_DATE-}"
+
+# CLI overrides
+while (($#)); do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --targets)
+      shift
+      [[ $# -gt 0 ]] || die "Missing value for --targets"
+      TARGETS="$1"
+      ;;
+    --exclude-paths)
+      shift
+      [[ $# -gt 0 ]] || die "Missing value for --exclude-paths"
+      EXCLUDE_PATHS="$1"
+      ;;
+    --expires-days)
+      shift
+      [[ $# -gt 0 ]] || die "Missing value for --expires-days"
+      EXPIRES_DAYS="$1"
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *)
+      die "Unknown option: $1"
+      ;;
+  esac
+  shift
+done
+
+if [[ $# -gt 0 ]]; then
+  die "Unexpected arguments: $*"
+fi
+
+if ! [[ "${EXPIRES_DAYS}" =~ ^[0-9]+$ ]]; then
+  die "EXPIRES_DAYS must be a non-negative integer"
+fi
+
+if [[ -n "${CURRENT_DATE}" ]]; then
+  expires_date="$(date -u -d "${CURRENT_DATE} +${EXPIRES_DAYS} days" +%F)"
+else
+  expires_date="$(date -u -d "+${EXPIRES_DAYS} days" +%F)"
+fi
+
+if [[ -z "${TARGETS//[[:space:]]/}" ]]; then
+  echo "No targets provided; nothing to do."
+  exit 0
+fi
+
+IFS=$' \n\t' read -r -a DIRS <<< "${TARGETS}"
+IFS=$' \n\t' read -r -a EXCLUDES <<< "${EXCLUDE_PATHS}"
+
+shopt -s globstar
+valid_dirs=0
+for dir in "${DIRS[@]}"; do
+  [[ -d "${dir}" ]] || continue
+  valid_dirs=$((valid_dirs + 1))
+
+  prune_args=()
+  for exclude in "${EXCLUDES[@]}"; do
+    [[ -n "${exclude}" ]] || continue
+    if [[ "${exclude}" == /* ]]; then
+      prune_args+=(-path "${exclude}" -prune -o)
+    else
+      exclude="${exclude#./}"
+      prune_args+=(-path "${dir%/}/${exclude}" -prune -o)
+    fi
+  done
+
+  find "${dir}" "${prune_args[@]}" -type f -path '*/.well-known/security.txt' -print0 | while IFS= read -r -d '' file; do
+    if [[ "$(file --mime-type --brief "${file}")" == text/* ]]; then
+      sed \
+        --regexp-extended \
+        --in-place \
+        -e "s/^Expires: .*/Expires: ${expires_date}T23:59:59Z/" \
+        "${file}"
+    fi
+  done
+done
+
+if [[ "${valid_dirs}" -eq 0 ]]; then
+  echo "No valid target directories found; nothing to do."
+  exit 0
+fi

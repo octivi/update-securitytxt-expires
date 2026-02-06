@@ -1,0 +1,289 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2025-2026  IMAGIN sp. z o.o.
+# SPDX-FileContributor: Marcin Engelmann <mengelmann@octivi.com>
+# SPDX-License-Identifier: MIT
+#
+# This file is part of the configuration created by Octivi's DevOps team.
+# Details at https://octivi.com/devops
+
+# Octivi Bash Boilerplate (OBB) Header
+# Part of Octivi Bash Boilerplate https://github.com/octivi/bash-boilerplate
+################################################################################
+# Unofficial Bash "Strict Mode"
+# http://redsymbol.net/articles/unofficial-bash-strict-mode/
+set -euo pipefail
+# Define common constants regardless if they are used in the script
+__my_name="$(basename "${BASH_SOURCE[0]}")"
+readonly __my_name
+__my_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly __my_dir
+__my_path="${__my_dir}/${__my_name}"
+# shellcheck disable=SC2034
+readonly __my_path
+__my_args="$*"
+# shellcheck disable=SC2034
+readonly __my_args
+# Set IFS to just newline and tab
+IFS=$'\n\t'
+################################################################################
+UPDATE_SECURITYTXT_EXPIRES="$(cd "${__my_dir}/.." && pwd)/update-securitytxt-expires"
+
+TMP_DIRS=()
+CAPTURED_OUTPUT=""
+CAPTURED_STATUS=0
+
+cleanup() {
+  local dir
+  for dir in "${TMP_DIRS[@]}"; do
+    [[ -n "${dir}" ]] && rm -rf "${dir}"
+  done
+}
+
+trap cleanup EXIT
+
+fail() {
+  echo "FAIL: $*" 1>&2
+  exit 1
+}
+
+assert_contains() {
+  local file="$1"
+  local expected="$2"
+  if ! grep -Fq -- "${expected}" "${file}"; then
+    echo "Expected to find: ${expected}" 1>&2
+    echo "In file: ${file}" 1>&2
+    echo "---" 1>&2
+    sed -n '1,200p' "${file}" 1>&2
+    echo "---" 1>&2
+    fail "assert_contains"
+  fi
+}
+
+assert_not_contains() {
+  local file="$1"
+  local expected="$2"
+  if grep -Fq -- "${expected}" "${file}"; then
+    echo "Expected NOT to find: ${expected}" 1>&2
+    echo "In file: ${file}" 1>&2
+    echo "---" 1>&2
+    sed -n '1,200p' "${file}" 1>&2
+    echo "---" 1>&2
+    fail "assert_not_contains"
+  fi
+}
+
+assert_equal() {
+  local actual="$1"
+  local expected="$2"
+  if [[ "${actual}" != "${expected}" ]]; then
+    echo "Expected: ${expected}" 1>&2
+    echo "Actual:   ${actual}" 1>&2
+    fail "assert_equal"
+  fi
+}
+
+assert_str_contains() {
+  local haystack="$1"
+  local expected="$2"
+  if [[ "${haystack}" != *"${expected}"* ]]; then
+    echo "Expected to find: ${expected}" 1>&2
+    echo "In output:" 1>&2
+    echo "${haystack}" 1>&2
+    fail "assert_str_contains"
+  fi
+}
+
+run_and_capture() {
+  local out
+  local status
+  set +e
+  out="$("$@" 2>&1)"
+  status=$?
+  set -e
+  CAPTURED_OUTPUT="${out}"
+  CAPTURED_STATUS=${status}
+}
+
+make_tmp() {
+  local dir
+  dir="$(mktemp -d)"
+  TMP_DIRS+=("${dir}")
+  printf "%s\n" "${dir}"
+}
+
+run_test() {
+  local name="$1"
+  shift
+  echo "==> ${name}"
+  "$@"
+}
+
+test_default_update_uses_default_days() {
+  local tmp
+  tmp="$(make_tmp)"
+  mkdir -p "${tmp}/site/.well-known"
+
+  cat <<'TXT' > "${tmp}/site/.well-known/security.txt"
+Contact: mailto:security@example.com
+Expires: 2024-12-01T23:59:59Z
+TXT
+
+  CURRENT_DATE=2025-01-01 "${UPDATE_SECURITYTXT_EXPIRES}" --targets "${tmp}"
+
+  assert_contains "${tmp}/site/.well-known/security.txt" "Expires: 2025-06-30T23:59:59Z"
+}
+
+test_expires_days_cli_override() {
+  local tmp
+  tmp="$(make_tmp)"
+  mkdir -p "${tmp}/site/.well-known"
+
+  cat <<'TXT' > "${tmp}/site/.well-known/security.txt"
+Expires: 2024-12-01T23:59:59Z
+TXT
+
+  CURRENT_DATE=2025-01-01 "${UPDATE_SECURITYTXT_EXPIRES}" --targets "${tmp}" --expires-days 30
+
+  assert_contains "${tmp}/site/.well-known/security.txt" "Expires: 2025-01-31T23:59:59Z"
+}
+
+test_expires_days_env_override() {
+  local tmp
+  tmp="$(make_tmp)"
+  mkdir -p "${tmp}/site/.well-known"
+
+  cat <<'TXT' > "${tmp}/site/.well-known/security.txt"
+Expires: 2024-12-01T23:59:59Z
+TXT
+
+  CURRENT_DATE=2025-01-01 EXPIRES_DAYS=7 "${UPDATE_SECURITYTXT_EXPIRES}" --targets "${tmp}"
+
+  assert_contains "${tmp}/site/.well-known/security.txt" "Expires: 2025-01-08T23:59:59Z"
+}
+
+test_updates_only_well_known_securitytxt() {
+  local tmp
+  tmp="$(make_tmp)"
+  mkdir -p "${tmp}/.well-known"
+
+  cat <<'TXT' > "${tmp}/.well-known/security.txt"
+Expires: 2024-12-01T23:59:59Z
+TXT
+
+  cat <<'TXT' > "${tmp}/security.txt"
+Expires: 2024-12-01T23:59:59Z
+TXT
+
+  CURRENT_DATE=2025-01-01 "${UPDATE_SECURITYTXT_EXPIRES}" --targets "${tmp}" --expires-days 1
+
+  assert_contains "${tmp}/.well-known/security.txt" "Expires: 2025-01-02T23:59:59Z"
+  assert_contains "${tmp}/security.txt" "Expires: 2024-12-01T23:59:59Z"
+  assert_not_contains "${tmp}/security.txt" "Expires: 2025-01-02T23:59:59Z"
+}
+
+test_exclude_paths_relative() {
+  local tmp
+  tmp="$(make_tmp)"
+  mkdir -p "${tmp}/site/.well-known" "${tmp}/skip/.well-known"
+
+  cat <<'TXT' > "${tmp}/site/.well-known/security.txt"
+Expires: 2024-12-01T23:59:59Z
+TXT
+  cat <<'TXT' > "${tmp}/skip/.well-known/security.txt"
+Expires: 2024-12-01T23:59:59Z
+TXT
+
+  (
+    cd "${tmp}"
+    CURRENT_DATE=2025-01-01 "${UPDATE_SECURITYTXT_EXPIRES}" --targets "." --exclude-paths "skip" --expires-days 10
+  )
+
+  assert_contains "${tmp}/site/.well-known/security.txt" "Expires: 2025-01-11T23:59:59Z"
+  assert_contains "${tmp}/skip/.well-known/security.txt" "Expires: 2024-12-01T23:59:59Z"
+  assert_not_contains "${tmp}/skip/.well-known/security.txt" "Expires: 2025-01-11T23:59:59Z"
+}
+
+test_exclude_paths_absolute() {
+  local tmp
+  tmp="$(make_tmp)"
+  mkdir -p "${tmp}/site/.well-known" "${tmp}/skip/.well-known"
+
+  cat <<'TXT' > "${tmp}/site/.well-known/security.txt"
+Expires: 2024-12-01T23:59:59Z
+TXT
+  cat <<'TXT' > "${tmp}/skip/.well-known/security.txt"
+Expires: 2024-12-01T23:59:59Z
+TXT
+
+  CURRENT_DATE=2025-01-01 "${UPDATE_SECURITYTXT_EXPIRES}" \
+    --targets "${tmp}" \
+    --exclude-paths "${tmp}/skip" \
+    --expires-days 10
+
+  assert_contains "${tmp}/site/.well-known/security.txt" "Expires: 2025-01-11T23:59:59Z"
+  assert_contains "${tmp}/skip/.well-known/security.txt" "Expires: 2024-12-01T23:59:59Z"
+  assert_not_contains "${tmp}/skip/.well-known/security.txt" "Expires: 2025-01-11T23:59:59Z"
+}
+
+test_no_targets_whitespace() {
+  run_and_capture env CURRENT_DATE=2025-01-01 "${UPDATE_SECURITYTXT_EXPIRES}" --targets "   "
+
+  assert_equal "${CAPTURED_STATUS}" "0"
+  assert_str_contains "${CAPTURED_OUTPUT}" "No targets provided; nothing to do."
+}
+
+test_no_valid_target_dirs() {
+  run_and_capture "${UPDATE_SECURITYTXT_EXPIRES}" --targets "/path/does-not-exist"
+
+  assert_equal "${CAPTURED_STATUS}" "0"
+  assert_str_contains "${CAPTURED_OUTPUT}" "No valid target directories found; nothing to do."
+}
+
+test_cli_unknown_option() {
+  run_and_capture "${UPDATE_SECURITYTXT_EXPIRES}" --nope
+
+  assert_equal "${CAPTURED_STATUS}" "1"
+  assert_str_contains "${CAPTURED_OUTPUT}" "Unknown option: --nope"
+}
+
+test_cli_missing_value() {
+  run_and_capture "${UPDATE_SECURITYTXT_EXPIRES}" --expires-days
+
+  assert_equal "${CAPTURED_STATUS}" "1"
+  assert_str_contains "${CAPTURED_OUTPUT}" "Missing value for --expires-days"
+}
+
+test_cli_unexpected_args() {
+  run_and_capture "${UPDATE_SECURITYTXT_EXPIRES}" -- --surprise
+
+  assert_equal "${CAPTURED_STATUS}" "1"
+  assert_str_contains "${CAPTURED_OUTPUT}" "Unexpected arguments: --surprise"
+}
+
+test_invalid_expires_days() {
+  run_and_capture "${UPDATE_SECURITYTXT_EXPIRES}" --expires-days "abc"
+
+  assert_equal "${CAPTURED_STATUS}" "1"
+  assert_str_contains "${CAPTURED_OUTPUT}" "EXPIRES_DAYS must be a non-negative integer"
+}
+
+main() {
+  [[ -x "${UPDATE_SECURITYTXT_EXPIRES}" ]] || fail "Script not executable: ${UPDATE_SECURITYTXT_EXPIRES}"
+
+  run_test "default update uses default days" test_default_update_uses_default_days
+  run_test "expires days cli override" test_expires_days_cli_override
+  run_test "expires days env override" test_expires_days_env_override
+  run_test "updates only .well-known/security.txt" test_updates_only_well_known_securitytxt
+  run_test "exclude paths relative" test_exclude_paths_relative
+  run_test "exclude paths absolute" test_exclude_paths_absolute
+  run_test "no targets whitespace" test_no_targets_whitespace
+  run_test "no valid target dirs" test_no_valid_target_dirs
+  run_test "cli unknown option" test_cli_unknown_option
+  run_test "cli missing value" test_cli_missing_value
+  run_test "cli unexpected args" test_cli_unexpected_args
+  run_test "invalid expires days" test_invalid_expires_days
+
+  echo "All tests passed."
+}
+
+main "$@"

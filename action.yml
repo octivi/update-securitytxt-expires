@@ -1,0 +1,36 @@
+---
+# SPDX-FileCopyrightText: 2025-2026  IMAGIN sp. z o.o.
+# SPDX-FileContributor: Marcin Engelmann <mengelmann@octivi.com>
+# SPDX-License-Identifier: MIT
+#
+# This file is part of the configuration created by Octivi's DevOps team.
+# Details at https://octivi.com/devops
+
+name: Update security.txt Expires field
+description: "GitHub Action to update the Expires field in `security.txt` files (`/.well-known/security.txt`, RFC 9116) to a future date so your published security contact metadata stays current."
+branding:
+  icon: calendar
+  color: blue
+inputs:
+  targets:
+    description: "Directories to scan (space-separated), e.g. '. src scripts'"
+    required: false
+    default: "."
+  exclude_paths:
+    description: "Paths to exclude (space-separated), e.g. 'build'"
+    required: false
+    default: ""
+  expires_days:
+    description: "Number of days to add to the current date for the Expires field"
+    required: false
+    default: "180"
+runs:
+  using: composite
+  steps:
+    - name: Update security.txt Expires field
+      shell: bash
+      env:
+        TARGETS: ${{ inputs.targets }}
+        EXCLUDE_PATHS: ${{ inputs.exclude_paths }}
+        EXPIRES_DAYS: ${{ inputs.expires_days }}
+      run: ${{ github.action_path }}/update-securitytxt-expires
