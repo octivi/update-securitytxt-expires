@@ -32,13 +32,17 @@ IFS=$'\n\t'
 
 usage() {
   cat <<USAGE
-Usage: ${__my_name} [options]
+Usage: ${__my_name} [--targets targets] [--exclude-paths exclude_paths] [--expires-days expires_days] [--help|-h]
 
 Options:
-  --targets "dir1 dir2"           Directories to scan (default: .)
-  --exclude-paths "path1 path2"   Paths to exclude (default: empty)
-  --expires-days "days"           Number of days to add to current date (default: 180)
+  --targets targets               Directories to scan (default: .)
+  --exclude-paths exclude_paths   Paths to exclude (default: empty)
+  --expires-days expires_days     Non-negative integer, days added to current date (default: 180)
   -h, --help                      Show this help message
+
+For list options, pass a single option-argument and separate items with spaces, for example:
+  --targets ". src scripts"
+  --exclude-paths "build dist"
 USAGE
 }
 
