@@ -86,7 +86,7 @@ while (($#)); do
   shift
 done
 
-if [[ $# -gt 0 ]]; then
+if (($# > 0)); then
   die "Unexpected arguments: $*"
 fi
 
