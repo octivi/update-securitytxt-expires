@@ -225,6 +225,38 @@ TXT
   assert_not_contains "${tmp}/skip/.well-known/security.txt" "Expires: 2025-01-11T23:59:59Z"
 }
 
+test_multiline_targets_and_exclude_paths() {
+  local tmp
+  local targets
+  local excludes
+  tmp="$(make_tmp)"
+  mkdir -p "${tmp}/site-a/.well-known" "${tmp}/site-b/.well-known" "${tmp}/skip-a/.well-known"
+
+  cat <<'TXT' > "${tmp}/site-a/.well-known/security.txt"
+Expires: 2024-12-01T23:59:59Z
+TXT
+  cat <<'TXT' > "${tmp}/site-b/.well-known/security.txt"
+Expires: 2024-12-01T23:59:59Z
+TXT
+  cat <<'TXT' > "${tmp}/skip-a/.well-known/security.txt"
+Expires: 2024-12-01T23:59:59Z
+TXT
+
+  printf -v targets '%s\n%s\n%s' "${tmp}/site-a" "${tmp}/site-b" "${tmp}/skip-a"
+  printf -v excludes '%s\n%s' "${tmp}/skip-a" "${tmp}/non-existent"
+
+  CURRENT_DATE=2025-01-01 \
+  TARGETS="${targets}" \
+  EXCLUDE_PATHS="${excludes}" \
+  EXPIRES_DAYS=2 \
+  "${UPDATE_SECURITYTXT_EXPIRES}"
+
+  assert_contains "${tmp}/site-a/.well-known/security.txt" "Expires: 2025-01-03T23:59:59Z"
+  assert_contains "${tmp}/site-b/.well-known/security.txt" "Expires: 2025-01-03T23:59:59Z"
+  assert_contains "${tmp}/skip-a/.well-known/security.txt" "Expires: 2024-12-01T23:59:59Z"
+  assert_not_contains "${tmp}/skip-a/.well-known/security.txt" "Expires: 2025-01-03T23:59:59Z"
+}
+
 test_no_targets_whitespace() {
   run_and_capture env CURRENT_DATE=2025-01-01 "${UPDATE_SECURITYTXT_EXPIRES}" --targets "   "
 
@@ -276,6 +308,7 @@ main() {
   run_test "updates only .well-known/security.txt" test_updates_only_well_known_securitytxt
   run_test "exclude paths relative" test_exclude_paths_relative
   run_test "exclude paths absolute" test_exclude_paths_absolute
+  run_test "multiline targets and exclude paths" test_multiline_targets_and_exclude_paths
   run_test "no targets whitespace" test_no_targets_whitespace
   run_test "no valid target dirs" test_no_valid_target_dirs
   run_test "cli unknown option" test_cli_unknown_option

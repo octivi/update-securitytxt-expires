@@ -32,8 +32,8 @@ value fresh, so security contact metadata does not become stale.
 
 | Input | Description | Required | Default |
 | --- | --- | --- | --- |
-| `targets` | Space-separated directories to scan. | No | `"."` |
-| `exclude_paths` | Space-separated paths to exclude. | No | `""` |
+| `targets` | Space-, comma- or newline-separated directories to scan. | No | `"."` |
+| `exclude_paths` | Space-, comma- or newline-separated paths to exclude. | No | `""` |
 | `expires_days` | Number of days to add to current date. | No | `"180"` |
 
 ## CLI usage
@@ -49,6 +49,7 @@ Run locally from this repo:
 
 Options map 1:1 to the action inputs. You can also set them via env vars:
 `TARGETS`, `EXCLUDE_PATHS`, `EXPIRES_DAYS`.
+For list inputs (`TARGETS`, `EXCLUDE_PATHS`) you can separate values with spaces, commas, newlines, or mix these separators.
 
 For deterministic local tests you can also set `CURRENT_DATE`, for example:
 

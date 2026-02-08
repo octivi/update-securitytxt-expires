@@ -13,11 +13,11 @@ branding:
   color: blue
 inputs:
   targets:
-    description: "Directories to scan (space-separated), e.g. '. src scripts'"
+    description: "Directories to scan (space-, comma- or newline-separated), e.g. '. src scripts'"
     required: false
     default: "."
   exclude_paths:
-    description: "Paths to exclude (space-separated), e.g. 'build'"
+    description: "Paths to exclude (space-, comma- or newline-separated), e.g. 'build'"
     required: false
     default: ""
   expires_days:

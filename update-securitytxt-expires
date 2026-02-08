@@ -40,7 +40,8 @@ Options:
   --expires-days expires_days     Non-negative integer, days added to current date (default: 180)
   -h, --help                      Show this help message
 
-For list options, pass a single option-argument and separate items with spaces, for example:
+For list options, pass a single option-argument and separate items with spaces, commas,
+or newlines, for example:
   --targets ". src scripts"
   --exclude-paths "build dist"
 USAGE
@@ -49,6 +50,25 @@ USAGE
 die() {
   echo "ERROR: $*" 1>&2
   exit 1
+}
+
+append_values() {
+  local target_array_name="$1"
+  local raw_values="$2"
+  local normalized
+  local token
+  local -a tokens=()
+  local -n target_array="${target_array_name}"
+
+  normalized="${raw_values//,/ }"
+  normalized="${normalized//$'\r'/ }"
+  normalized="${normalized//$'\n'/ }"
+
+  IFS=$' \n\t' read -r -a tokens <<< "${normalized}"
+  for token in "${tokens[@]}"; do
+    [[ -n "${token//[[:space:]]/}" ]] || continue
+    target_array+=("${token}")
+  done
 }
 
 # Defaults (env overrides with fallbacks)
@@ -109,8 +129,10 @@ if [[ -z "${TARGETS//[[:space:]]/}" ]]; then
   exit 0
 fi
 
-IFS=$' \n\t' read -r -a DIRS <<< "${TARGETS}"
-IFS=$' \n\t' read -r -a EXCLUDES <<< "${EXCLUDE_PATHS}"
+declare -a DIRS=()
+declare -a EXCLUDES=()
+append_values DIRS "${TARGETS}"
+append_values EXCLUDES "${EXCLUDE_PATHS}"
 
 shopt -s globstar
 valid_dirs=0
