@@ -153,6 +153,13 @@ jobs:
 If you run into issues, open a GitHub issue in this repository and include a minimal reproduction
 (sample file + workflow snippet).
 
+## Other Octivi GitHub Actions
+
+If you are interested in other GitHub Actions we build, see:
+
+- [`octivi/update-copyright-year`](https://github.com/octivi/update-copyright-year) - Updates the copyright year in file headers across your repository
+- [`octivi/cloudflare-cache-purge`](https://github.com/octivi/cloudflare-cache-purge) - Purges Cloudflare cache via Cloudflare API
+
 ## Maintainers and contributors
 
 Maintained by the [Octivi DevOps team](https://octivi.com/devops). Contributions are welcome via
