@@ -6,6 +6,11 @@
 # This file is part of the configuration created by Octivi's DevOps team.
 # Details at https://octivi.com/devops
 #
+# This script is part of a GitHub Action available on GitHub Marketplace:
+# https://github.com/marketplace/actions/update-securitytxt-expires
+#
+# Source code repository:https://github.com/octivi/update-securitytxt-expires
+#
 # Update the Expires field in `security.txt` files to a future date so your published security
 # contact metadata stays current.
 
